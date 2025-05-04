@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Auth\GitHubController;
+use App\Http\Controllers\Auth\GoogleController;
+use App\Livewire\Orders\ShowOrders;
 use App\Livewire\Prices\ShowPrices;
 use App\Models\Order;
 use App\Models\Plan;
@@ -12,6 +15,12 @@ use Stripe\Stripe;
 Route::get('/', function () {
     return view('welcome');
 })->name('home');
+
+Route::get('/auth/redirect/google', [GoogleController::class, 'redirect'])->name('google.redirect');
+Route::get('/auth/callback/google', [GoogleController::class, 'callback'])->name('google.callback');
+
+Route::get('/auth/redirect/github', [GitHubController::class, 'redirect'])->name('github.redirect');
+Route::get('/auth/callback/github', [GitHubController::class, 'callback'])->name('github.callback');
 
 Route::view('dashboard', 'dashboard')
     ->middleware(['auth', 'verified'])
@@ -47,7 +56,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/pricing', ShowPrices::class)
         ->name('pricing');
 
-    Route::get('/orders', \App\Livewire\Orders\ShowOrders::class)->name('orders.index');
+    Route::get('/orders', ShowOrders::class)->name('orders.index');
 
     Route::redirect('settings', 'settings/profile');
 

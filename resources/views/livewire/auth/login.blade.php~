@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
+use App\Models\User;
 
 new #[Layout('components.layouts.auth')] class extends Component {
     #[Validate('required|string|email')]
@@ -26,10 +27,29 @@ new #[Layout('components.layouts.auth')] class extends Component {
     public function login(): void
     {
         $this->validate();
-
         $this->ensureIsNotRateLimited();
 
-        if (!Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
+        $user = User::where('email', $this->email)->first();
+
+        if ($user && $user->google_id && !$user->password) {
+            throw ValidationException::withMessages([
+                'email' => 'Dit account is gekoppeld aan Google. Log in met Google.',
+            ]);
+        }
+
+        if ($user && $user->github_id && !$user->password) {
+            throw ValidationException::withMessages([
+                'email' => 'Dit account is gekoppeld aan GitHub. Log in met GitHub.',
+            ]);
+        }
+
+        if ($user && !$user->password && !$user->google_id && !$user->github_id) {
+            throw ValidationException::withMessages([
+                'email' => 'Dit account heeft nog geen wachtwoord. Stel eerst een wachtwoord in via de wachtwoordpagina.',
+            ]);
+        }
+
+        if (! Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
@@ -40,7 +60,7 @@ new #[Layout('components.layouts.auth')] class extends Component {
         RateLimiter::clear($this->throttleKey());
         Session::regenerate();
 
-        $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+        $this->redirectIntended(route('dashboard'), navigate: true);
     }
 
     /**
@@ -48,7 +68,7 @@ new #[Layout('components.layouts.auth')] class extends Component {
      */
     protected function ensureIsNotRateLimited(): void
     {
-        if (!RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
             return;
         }
 
@@ -69,16 +89,15 @@ new #[Layout('components.layouts.auth')] class extends Component {
      */
     protected function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->email) . '|' . request()->ip());
+        return Str::transliterate(Str::lower($this->email).'|'.request()->ip());
     }
 }; ?>
 
 <div class="flex flex-col gap-6">
-    <x-auth-header :title="__('Log in to your account')"
-                   :description="__('Enter your email and password below to log in')"/>
+    <x-auth-header :title="__('Log in to your account')" :description="__('Enter your email and password below to log in')" />
 
     <!-- Session Status -->
-    <x-auth-session-status class="text-center" :status="session('status')"/>
+    <x-auth-session-status class="text-center" :status="session('status')" />
 
     <form wire:submit="login" class="flex flex-col gap-6">
         <!-- Email Address -->
@@ -101,18 +120,17 @@ new #[Layout('components.layouts.auth')] class extends Component {
                 required
                 autocomplete="current-password"
                 :placeholder="__('Password')"
-                viewable
             />
 
             @if (Route::has('password.request'))
-                <flux:link class="absolute end-0 top-0 text-sm" :href="route('password.request')" wire:navigate>
+                <flux:link class="absolute right-0 top-0 text-sm" :href="route('password.request')" wire:navigate>
                     {{ __('Forgot your password?') }}
                 </flux:link>
             @endif
         </div>
 
         <!-- Remember Me -->
-        <flux:checkbox wire:model="remember" :label="__('Remember me')"/>
+        <flux:checkbox wire:model="remember" :label="__('Remember me')" />
 
         <div class="flex items-center justify-end">
             <flux:button variant="primary" type="submit" class="w-full">{{ __('Log in') }}</flux:button>
@@ -120,16 +138,19 @@ new #[Layout('components.layouts.auth')] class extends Component {
     </form>
 
     <div class="relative text-center">
-        <div class="my-4 flex items-center justify-center space-x-2 text-sm text-zinc-500">
-            <span class="w-1/5 border-t"></span> <span>of</span> <span class="w-1/5 border-t"></span></div>
+        <div class="my-4 flex items-center justify-center space-x-2 text-sm text-zinc-500 dark:text-zinc-400">
+            <span class="w-1/5 border-t"></span>
+            <span>{{ __('or') }}</span>
+            <span class="w-1/5 border-t"></span>
+        </div>
         <div class="space-y-4">
-            <livewire:auth.google-login/>
-            <livewire:auth.github-login/>
+            <livewire:auth.google-login />
+            <livewire:auth.github-login />
         </div>
     </div>
 
     @if (Route::has('register'))
-        <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-600 dark:text-zinc-400">
+        <div class="space-x-1 text-center text-sm text-zinc-600 dark:text-zinc-400">
             {{ __('Don\'t have an account?') }}
             <flux:link :href="route('register')" wire:navigate>{{ __('Sign up') }}</flux:link>
         </div>

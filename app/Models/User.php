@@ -9,11 +9,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Cashier\Billable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, Billable;
+    use HasFactory, Notifiable, Billable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -24,6 +25,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'google_id',
+        'github_id',
+        'avatar',
+        'can_set_password',
     ];
 
     /**
@@ -55,6 +60,16 @@ class User extends Authenticatable
     public function latestOrder()
     {
         return $this->hasOne(Order::class)->latestOfMany();
+    }
+
+    public function registeredWithGoogle(): bool
+    {
+        return !is_null($this->google_id);
+    }
+
+    public function registeredWithGithub(): bool
+    {
+        return !is_null($this->github_id);
     }
 
     /**
