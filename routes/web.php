@@ -1,0 +1,59 @@
+<?php
+
+use App\Livewire\Prices\ShowPrices;
+use App\Models\Order;
+use App\Models\Plan;
+use App\Models\User;
+use Illuminate\Support\Facades\Route;
+use Livewire\Volt\Volt;
+use Stripe\Checkout\Session;
+use Stripe\Stripe;
+
+Route::get('/', function () {
+    return view('welcome');
+})->name('home');
+
+Route::view('dashboard', 'dashboard')
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
+
+Route::get('/home', function () {
+    return 'Welkom thuis na betaling!';
+})->name('home');
+
+Route::get('/checkout', function () {
+    $user = User::first();
+    return $user->newSubscription('default', 'price_1R8eddQsPaPro7IJW2NSym0L')->checkout();
+});
+
+Route::get('/checkout/success/{plan}', function (Plan $plan) {
+    Stripe::setApiKey(config('services.stripe.secret'));
+    $user = Auth::user();
+    $session = Session::retrieve(request('session_id'));
+    $stripe_transaction_id = $session->payment_intent ?? $session->subscription ?? 'onbekend';
+    $order = Order::where('stripe_transaction_id', $stripe_transaction_id)->first();
+    if (!$order) {
+        Order::create(['user_id' => $user->id, 'plan_id' => $plan->id, 'stripe_transaction_id' => $stripe_transaction_id, 'amount' => $plan->price, 'status' => 'paid',]);
+    }
+    return redirect()->route('dashboard')->with('success', 'Je bent nu geabonneerd op het ' . $plan->name . ' plan.');
+})->name('checkout.success');
+
+Route::get('/checkout/{plan}', function (Plan $plan) {
+    $user = Auth::user();
+    return $user->newSubscription('default', $plan->stripe_price_id)->checkout(['success_url' => route('checkout.success', ['plan' => $plan->id]) . '?session_id={CHECKOUT_SESSION_ID}', 'cancel_url' => route('pricing'),]);
+})->name('checkout');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/pricing', ShowPrices::class)
+        ->name('pricing');
+
+    Route::get('/orders', \App\Livewire\Orders\ShowOrders::class)->name('orders.index');
+
+    Route::redirect('settings', 'settings/profile');
+
+    Volt::route('settings/profile', 'settings.profile')->name('settings.profile');
+    Volt::route('settings/password', 'settings.password')->name('settings.password');
+    Volt::route('settings/appearance', 'settings.appearance')->name('settings.appearance');
+});
+
+require __DIR__ . '/auth.php';
